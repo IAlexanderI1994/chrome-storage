@@ -47,6 +47,7 @@ export class StorageManager {
 					// если закончилось время действия переменной - обнуляем
 					if ( StorageManager.isExpired( items[ key ].expire ) ) {
 						items[ key ].value = 0;
+						// Сохраняем новые данные
 						StorageManager.saveData( items, 1000 * 60 );
 
 					}
