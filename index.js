@@ -1,3 +1,4 @@
+
 /**
  * Класс для операций с chrome storage
  */
@@ -5,27 +6,63 @@ export class StorageManager {
 	/**
 	 * Функция сохранения
 	 * @param data {object}
-	 * @param duration {int}
+	 * @param duration {int?}
 	 * @returns {boolean}
 	 */
 	static saveData( data, duration ) {
+
 		// Если некорректный параметр
 		if ( typeof data !== "object" ) {
 			return false;
 		}
+
 		// если длительность не является UNIX-меткой
 		if ( Number( duration ) <= 0 ) {
 			return false;
 		}
-
+		// если продолжительность не задана, то ставим следующий день
+		if ( undefined === duration ) {
+			duration = StorageManager.nextDay();
+		}
+		else {
+			duration = Date.now() + duration;
+		}
 		// если ключи не содержат  объекты, форматируем
 		Object.keys( data ).forEach( k => typeof data[ k ] !== "object" ? data[ k ] = { value : data[ k ] } : true );
 
+		let expire = duration;
+
 
 		// добавляем время окончания действия
-		Object.keys( data ).forEach( k => data[ k ].expire = Date.now() + duration );
+		Object.keys( data ).forEach( k => data[ k ].expire = expire );
 		// сохраняем в storage
 		chrome.storage.sync.set( data );
+
+	}
+
+	static updateKey( key ) {
+
+		StorageManager.getData( key ).then( data => {
+
+			if ( data[ key ].hasOwnProperty( 'value' ) ) {
+
+				// do something
+
+				StorageManager.saveData( data );
+			}
+		} );
+
+	}
+
+	/**
+	 * Функция, которая возвращает Unix метку следующего дня
+	 */
+	static nextDay() {
+		const today   = new Date();
+		let next_date = new Date();
+		next_date.setDate( today.getDate() + 1 );
+
+		return new Date( next_date.getFullYear(), next_date.getMonth(), next_date.getDate() ).getTime() / 1000;
 
 	}
 
@@ -38,17 +75,26 @@ export class StorageManager {
 
 		return new Promise( function ( resolve, reject ) {
 			chrome.storage.sync.get( [ key ], function ( items ) {
-				console.log( items );
+				// если значение не найдено - создаем и обнуляем
 				if ( !items.hasOwnProperty( key ) ) {
-					reject( "Не найдено значение в хранилище" );
-				}
+					items[ key ] = {
+						value : 0,
+						expire : 0
+					};
 
+				}
+				// если указан срок действия
 				if ( items[ key ].hasOwnProperty( 'expire' ) ) {
-					// если закончилось время действия переменной - обнуляем
+					// проверяем, что срок действия является unix-меткой
+					if ( typeof items[ key ].expire !== 'number' ) {
+						items[ key ].expire = 0;
+					}
+					// если срок действия истек - обнуляем значение
 					if ( StorageManager.isExpired( items[ key ].expire ) ) {
+						console.log( items[ key ].expire + ' expired!' );
 						items[ key ].value = 0;
-						// Сохраняем новые данные
-						StorageManager.saveData( items, 1000 * 60 );
+						// сохраняем новые данные
+						StorageManager.saveData( items );
 
 					}
 				}
@@ -60,14 +106,9 @@ export class StorageManager {
 		} );
 	}
 
-	/**
-	 * Функция проверяет дату окончания действия переменной в storage
-	 * @param value
-	 * @returns {boolean}
-	 */
 	static isExpired( value ) {
 
-		return value < Date.now();
+		return Number( value ) < ( Date.now() / 1000 ) ;
 
 	}
 
